@@ -59,7 +59,7 @@ export default function AdmissionPortal() {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
-  const { register, handleSubmit, setValue, watch, reset, trigger, formState: { errors } } = useForm<ApplicationForm>({ resolver: zodResolver(applicationSchema) })
+  const { register, handleSubmit, setValue, watch, reset, trigger, formState: { errors } } = useForm<ApplicationForm>({ resolver: zodResolver(applicationSchema), mode: 'onChange' })
 
   const selectedDepartment = watch('department')
 
@@ -207,7 +207,7 @@ export default function AdmissionPortal() {
                       </div>
                       <div>
                         <label className="mb-1.5 block text-sm font-medium">Gender <span className="text-red-500">*</span></label>
-                        <Select onValueChange={(v) => setValue('gender', v)}>
+                        <Select onValueChange={(v) => { setValue('gender', v, { shouldValidate: true }) }}>
                           <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Male">Male</SelectItem>
@@ -241,7 +241,7 @@ export default function AdmissionPortal() {
                     </div>
                     <div>
                       <label className="mb-1.5 block text-sm font-medium">Department <span className="text-red-500">*</span></label>
-                      <Select onValueChange={(v) => setValue('department', v)}>
+                      <Select onValueChange={(v) => { setValue('department', v, { shouldValidate: true }) }}>
                         <SelectTrigger><SelectValue placeholder="Select a department" /></SelectTrigger>
                         <SelectContent>
                           {DEPARTMENTS.map((dept) => (
@@ -253,7 +253,7 @@ export default function AdmissionPortal() {
                     </div>
                     <div>
                       <label className="mb-1.5 block text-sm font-medium">Experience Level</label>
-                      <Select onValueChange={(v) => setValue('experienceLevel', v)}>
+                      <Select onValueChange={(v) => { setValue('experienceLevel', v) }}>
                         <SelectTrigger><SelectValue placeholder="Select experience level" /></SelectTrigger>
                         <SelectContent>
                           {EXPERIENCE_LEVELS.map((level) => (
