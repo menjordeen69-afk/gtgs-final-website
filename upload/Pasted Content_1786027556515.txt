@@ -1,0 +1,823 @@
+Using Claude Code with claude-sonnet-5
+
+I'll fix the deploy-blocking issues first, then clean up the repo. Let me check the Netlify Database skill for the correct setup approach before touching the schema.
+
+Read file ../../buildhome/.claude/skills/netlify-database/SKILL.md
+
+1	---
+2	name: netlify-database
+3	description: Use Netlify Database to store application data — records, collections, lists, user data, or any structured information. Provides a fully managed Postgres database. Use for CRUD operations, queryable data, or anything you would naturally model as rows in a table. Use Blobs only for files, binary assets, or cached responses.
+4	---
+5	
+6	# Netlify Database
+7	
+8	Netlify Database is a fully managed Postgres database built into the Netlify platform. It handles provisioning, migrations,
+9	and database branching automatically. There is no setup beyond installing the `@netlify/database` package.
+10	
+11	Prefer Netlify Database over Netlify Blobs for any application data — records, collections, lists, user-generated content,
+12	or anything you would store as rows. Use Blobs only for files, binary assets (images, video), or cached responses.
+13	
+14	## CRITICAL: Use the `@beta` dist-tag for Drizzle
+15	
+16	The Netlify Database adapter for Drizzle ORM only exists on the `beta` release line of `drizzle-orm`. You MUST install
+17	both `drizzle-orm` and `drizzle-kit` from the `@beta` dist-tag — the default `latest` versions do not include the
+18	Netlify Database adapter and will fail.
+19	
+20	This affects:
+21	- `npm install` commands: always install `drizzle-orm@beta` and `drizzle-kit@beta` (never `drizzle-orm` or
+22	  `drizzle-kit` without the tag).
+23	- Import paths: use `drizzle-orm`, `drizzle-orm/pg-core`, and `drizzle-orm/netlify-db` as normal. No package
+24	  name rewriting is needed — the `@beta` tag only affects the installed version, not the imports.
+25	
+26	If you forget the `@beta` tag, `drizzle-kit generate` will error with a message about being outdated, or the
+27	`drizzle-orm/netlify-db` import will fail to resolve.
+28	
+29	## CRITICAL: Database schema changes always require migrations
+30	
+31	Any code change that assumes a different database schema (adding tables, adding columns, renaming fields, changing types,
+32	adding indexes, etc.) will only work if a corresponding migration exists in `netlify/database/migrations/`. Without a
+33	migration, the database schema will not change and the application will break at runtime.
+34	
+35	This applies regardless of whether you are using Drizzle ORM or the native `@netlify/database` driver:
+36	- **With Drizzle ORM**: Update the schema definition, then run `npx drizzle-kit generate --name <descriptive_name>`
+37	- **With native driver**: Write a new SQL migration file in `netlify/database/migrations/`
+38	
+39	Never consider a schema change complete without a corresponding migration file.
+40	
+41	## Setup with Drizzle ORM (recommended)
+42	
+43	This is the recommended approach. It gives you type-safe schema definitions, a query builder, and automatic migration
+44	generation.
+45	
+46	### Step 1: Install packages
+47	
+48	```bash
+49	npm install @netlify/database drizzle-orm@beta
+50	npm install -D drizzle-kit@beta
+51	```
+52	
+53	### Step 2: Create the schema file
+54	
+55	Create `db/schema.ts` at the project root. Define all your tables here using Drizzle's schema builder.
+56	
+57	```typescript
+58	// db/schema.ts
+59	import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+60	
+61	export const users = pgTable("users", {
+62	  id: serial().primaryKey(),
+63	  name: text().notNull(),
+64	  email: text().notNull().unique(),
+65	  createdAt: timestamp("created_at").defaultNow(),
+66	});
+67	```
+68	
+69	When adding tables with foreign keys:
+70	
+71	```typescript
+72	export const posts = pgTable("posts", {
+73	  id: serial().primaryKey(),
+74	  title: text().notNull(),
+75	  content: text().notNull().default(""),
+76	  authorId: integer("author_id").notNull().references(() => users.id),
+77	  createdAt: timestamp("created_at").defaultNow(),
+78	});
+79	```
+80	
+81	IMPORTANT: Use snake_case strings for column names (e.g. `"created_at"`, `"author_id"`) to match Postgres conventions.
+82	The Drizzle column variable names can be camelCase.
+83	
+84	### Step 3: Create the database client
+85	
+86	Create `db/index.ts`. This file initializes the Drizzle client with the native Netlify Database adapter.
+87	
+88	```typescript
+89	// db/index.ts
+90	import { drizzle } from "drizzle-orm/netlify-db";
+91	import * as schema from "./schema.js";
+92	
+93	export const db = drizzle({ schema });
+94	```
+95	
+96	The connection is configured automatically — no connection string needed.
+97	
+98	### Step 4: Configure Drizzle Kit
+99	
+100	Create `drizzle.config.ts` at the project root. The `out` property MUST be set to `netlify/database/migrations` for
+101	Netlify to automatically apply migrations.
+102	
+103	```typescript
+104	// drizzle.config.ts
+105	import { defineConfig } from "drizzle-kit";
+106	
+107	export default defineConfig({
+108	  dialect: "postgresql",
+109	  schema: "./db/schema.ts",
+110	  out: "netlify/database/migrations",
+111	});
+112	```
+113	
+114	### Step 5: Generate migrations
+115	
+116	Every time you change the schema, run `drizzle-kit generate` with a `--name` describing the change
+117	(max 50 characters, snake_case, starting with an imperative verb like add, create, drop, alter, rename, index):
+118	
+119	```bash
+120	npx drizzle-kit generate --name add_users_bio
+121	```
+122	
+123	Without `--name`, drizzle-kit assigns a random two-word name that says nothing about the migration.
+124	
+125	This creates SQL migration files in `netlify/database/migrations/`.
+126	
+127	### Step 6: Use the database in functions
+128	
+129	```typescript
+130	// netlify/functions/api.ts
+131	import type { Config } from "@netlify/functions";
+132	import { db } from "../../db/index.js";
+133	import { users } from "../../db/schema.js";
+134	
+135	export default async (req: Request) => {
+136	  if (req.method === "GET") {
+137	    const allUsers = await db.select().from(users);
+138	    return Response.json(allUsers);
+139	  }
+140	
+141	  if (req.method === "POST") {
+142	    const { name, email } = await req.json();
+143	    const [user] = await db.insert(users).values({ name, email }).returning();
+144	    return Response.json(user, { status: 201 });
+145	  }
+146	
+147	  return new Response("Method not allowed", { status: 405 });
+148	};
+149	
+150	export const config: Config = {
+151	  path: "/api/users",
+152	};
+153	```
+154	
+155	### Drizzle ORM query reference
+156	
+157	```typescript
+158	import { eq, desc, and, or, like, sql } from "drizzle-orm";
+159	import { db } from "./db/index.js";
+160	import { users, posts } from "./db/schema.js";
+161	
+162	// Select all
+163	const allUsers = await db.select().from(users);
+164	
+165	// Select with condition
+166	const user = await db.select().from(users).where(eq(users.id, 1));
+167	
+168	// Select with ordering
+169	const sorted = await db.select().from(users).orderBy(desc(users.createdAt));
+170	
+171	// Select with limit
+172	const first10 = await db.select().from(users).limit(10);
+173	
+174	// Select specific columns
+175	const names = await db.select({ name: users.name }).from(users);
+176	
+177	// Insert one row
+178	const [inserted] = await db.insert(users).values({ name: "Ada", email: "ada@example.com" }).returning();
+179	
+180	// Insert multiple rows
+181	await db.insert(users).values([
+182	  { name: "Ada", email: "ada@example.com" },
+183	  { name: "Bob", email: "bob@example.com" },
+184	]);
+185	
+186	// Update
+187	await db.update(users).set({ name: "Ada Lovelace" }).where(eq(users.id, 1));
+188	
+189	// Delete
+190	await db.delete(users).where(eq(users.id, 1));
+191	
+192	// Join
+193	const postsWithAuthors = await db
+194	  .select()
+195	  .from(posts)
+196	  .innerJoin(users, eq(posts.authorId, users.id));
+197	```
+198	
+199	## Setup with native driver (alternative)
+200	
+201	Use this when you prefer raw SQL or don't want Drizzle ORM.
+202	
+203	### Install
+204	
+205	```bash
+206	npm install @netlify/database
+207	```
+208	
+209	### Query with `db.sql`
+210	
+211	```typescript
+212	import { getDatabase } from "@netlify/database";
+213	
+214	const db = getDatabase();
+215	
+216	// Select
+217	const users = await db.sql`SELECT * FROM users`;
+218	
+219	// Select with parameters (automatically parameterized)
+220	const user = await db.sql`SELECT * FROM users WHERE id = ${userId}`;
+221	
+222	// Insert with RETURNING
+223	const [newUser] = await db.sql`
+224	  INSERT INTO users (name, email)
+225	  VALUES (${"Ada"}, ${"ada@example.com"})
+226	  RETURNING *
+227	`;
+228	
+229	// Update
+230	await db.sql`UPDATE users SET name = ${"Ada Lovelace"} WHERE id = ${1}`;
+231	
+232	// Delete
+233	await db.sql`DELETE FROM users WHERE id = ${1}`;
+234	
+235	// Bulk insert
+236	const data = db.sql.values([
+237	  ["Ada", "ada@example.com"],
+238	  ["Bob", "bob@example.com"],
+239	]);
+240	await db.sql`INSERT INTO users (name, email) VALUES ${data}`;
+241	```
+242	
+243	### Transactions with `db.pool`
+244	
+245	```typescript
+246	const db = getDatabase();
+247	
+248	const client = await db.pool.connect();
+249	try {
+250	  await client.query("BEGIN");
+251	  await client.query("INSERT INTO users (name, email) VALUES ($1, $2)", ["Ada", "ada@example.com"]);
+252	  await client.query("INSERT INTO posts (author_id, title) VALUES ($1, $2)", [1, "First post"]);
+253	  await client.query("COMMIT");
+254	} catch (e) {
+255	  await client.query("ROLLBACK");
+256	  throw e;
+257	} finally {
+258	  client.release();
+259	}
+260	```
+261	
+262	### Write migrations manually
+263	
+264	When using the native driver, write SQL migration files by hand in `netlify/database/migrations/`.
+265	
+266	Each migration is a SQL file named `<number>_<slug>.sql`:
+267	
+268	```
+269	netlify/database/migrations/
+270	├── 20260417143022_create-users.sql
+271	├── 20260418091500_add-posts.sql
+272	└── 20260419112330_create-comments.sql
+273	```
+274	
+275	Example migration:
+276	
+277	```sql
+278	-- netlify/database/migrations/20260417143022_create-users.sql
+279	CREATE TABLE users (
+280	  id SERIAL PRIMARY KEY,
+281	  name TEXT NOT NULL,
+282	  email TEXT UNIQUE NOT NULL,
+283	  created_at TIMESTAMP DEFAULT NOW()
+284	);
+285	```
+286	
+287	Rules for migration names:
+288	- `number` is any sequence of digits (e.g. `001`, `0001`, or a 
+... [truncated]
+
+Run command grep -rln "@/lib/db\|from ['\"].*prisma" src | sort; echo "---adapter usage---"; grep -rn "PrismaAdapter\|prisma-adapter" src; echo "---netlify/database dir---"; ls -la netlify 2>/dev/null; find . -maxdepth 3 -iname "*migrations*" -not -path "./node_modules/*"; echo "---db access patterns---"; grep -rn "db\.\(user\|loginLog\|application\|document\|siteVisit\|download\|emailCampaign\)" src --include="*.ts" --include="*.tsx" -i | wc -l
+
+src/app/api/admin/security/route.ts
+src/app/api/applications/[id]/route.ts
+src/app/api/applications/route.ts
+src/app/api/auth/enrich-login/route.ts
+src/app/api/campaigns/[id]/route.ts
+src/app/api/login-history/route.ts
+src/app/api/login-history/sign-out-others/route.ts
+src/app/api/users/route.ts
+src/lib/auth-options.ts
+src/lib/db.ts
+---adapter usage---
+---netlify/database dir---
+---db access patterns---
+42
+
+Let me set up a task list since this is a substantial migration, and read all files that touch the database.
+
+Now let me quickly fix the build script since it's a one-line fix, then dig into the database migration.
+
+Read file package.json
+
+1	{
+2	  "name": "nextjs_tailwind_shadcn_ts",
+3	  "version": "0.2.1",
+4	  "private": true,
+5	  "scripts": {
+6	    "dev": "next dev -p 3000 2>&1 | tee dev.log",
+7	    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+8	    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
+9	    "lint": "eslint .",
+10	    "db:push": "prisma db push --accept-data-loss",
+11	    "db:generate": "prisma generate",
+12	    "db:migrate": "prisma migrate dev",
+13	    "db:reset": "prisma migrate reset"
+14	  },
+15	  "dependencies": {
+
+Edit file package.json
+
+The file /opt/build/repo/package.json has been updated successfully. (file state is current in your context — no need to Read it back)
+
+Build script fixed. Now let's dig into the database migration — I need to read every file that touches Prisma to design the Drizzle schema and rewrite queries accurately.
+
+Update task list
+
+Fix broken build script
+Migrate Prisma/SQLite to Netlify Database (Drizzle/Postgres)
+Remove committed db file and .env from repo
+Clean up large committed binaries
+Remove leftover non-Netlify scaffolding
+Read 2 files
+
+Read file src/app/api/applications/[id]/route.ts
+
+Read file src/app/api/applications/route.ts
+
+Now let's read the remaining files that use the database: admin routes, campaigns, login-history, users, and the auth files.
+
+Read 4 files
+
+Read file src/app/api/admin/stats/route.ts
+
+Read file src/app/api/admin/export/route.ts
+
+Read file src/app/api/admin/analytics/route.ts
+
+Read file src/app/api/admin/security/route.ts
+
+Good — stats/analytics/export are all mocked data with no DB calls, so no work needed there. Now let's check campaigns, login-history, users, and enrich-login.
+
+Read 6 files
+
+Read file src/app/api/campaigns/route.ts
+
+Read file src/app/api/login-history/route.ts
+
+Read file src/app/api/campaigns/[id]/route.ts
+
+Read file src/app/api/login-history/sign-out-others/route.ts
+
+Read file src/app/api/users/route.ts
+
+Read file src/app/api/auth/enrich-login/route.ts
+
+Run command grep -rn "\.user?\.\|\.user\.\(name\|image\|email\|role\)" src/app/admin src/app/dashboard src/components --include="*.tsx" 2>/dev/null | grep -v "session.user\|session?.user" | head -30
+
+Now I have the full picture. Let me check the tsconfig path alias and then write the Drizzle schema files.
+
+Run command cat /opt/build/repo/tsconfig.json
+
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
+
+Edit file tsconfig.json
+
+The file /opt/build/repo/tsconfig.json has been updated successfully. (file state is current in your context — no need to Read it back)
+
+Now let's install the required packages and remove the Prisma ones.
+
+Run command npm install @netlify/database drizzle-orm@beta 2>&1 | tail -20 && npm install -D drizzle-kit@beta 2>&1 | tail -20
+
+26 vulnerabilities (2 low, 7 moderate, 16 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm warn allow-scripts 8 packages have install scripts not yet covered by allowScripts:
+npm warn allow-scripts   @parcel/watcher@2.5.4 (install: node-gyp rebuild)
+npm warn allow-scripts   @prisma/client@6.19.2 (postinstall: node scripts/postinstall.js)
+npm warn allow-scripts   @prisma/engines@6.19.2 (postinstall: node scripts/postinstall.js)
+npm warn allow-scripts   @swc/core@1.15.8 (postinstall: node postinstall.js)
+npm warn allow-scripts   es5-ext@0.10.64 (postinstall:  node -e "try{require('./_postinstall')}catch(e){}" || exit 0)
+npm warn allow-scripts   prisma@6.19.2 (preinstall: node scripts/preinstall-entry.js)
+npm warn allow-scripts   sharp@0.34.5 (install: node install/check.js || npm run build)
+npm warn allow-scripts   unrs-resolver@1.11.1 (postinstall: napi-postinstall unrs-resolver 1.11.1 check)
+npm warn allow-scripts
+npm warn allow-scripts Run `npm approve-scripts --allow-scripts-pending` to review, or `npm approve-scripts <pkg>` to allow.
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm warn allow-scripts 9 packages have install scripts not yet covered by allowScripts:
+npm warn allow-scripts   @parcel/watcher@2.5.4 (install: node-gyp rebuild)
+npm warn allow-scripts   @prisma/client@6.19.2 (postinstall: node scripts/postinstall.js)
+npm warn allow-scripts   @prisma/engines@6.19.2 (postinstall: node scripts/postinstall.js)
+npm warn allow-scripts   @swc/core@1.15.8 (postinstall: node postinstall.js)
+npm warn allow-scripts   es5-ext@0.10.64 (postinstall:  node -e "try{require('./_postinstall')}catch(e){}" || exit 0)
+npm warn allow-scripts   prisma@6.19.2 (preinstall: node scripts/preinstall-entry.js)
+npm warn allow-scripts   sharp@0.34.5 (install: node install/check.js || npm run build)
+npm warn allow-scripts   unrs-resolver@1.11.1 (postinstall: napi-postinstall unrs-resolver 1.11.1 check)
+npm warn allow-scripts   esbuild@0.25.12 (postinstall: node install.js)
+npm warn allow-scripts
+npm warn allow-scripts Run `npm approve-scripts --allow-scripts-pending` to review, or `npm approve-scripts <pkg>` to allow.
+
+Good, packages installed. Now let's remove the Prisma-related dependencies since we're moving fully to Drizzle.
+
+Read file package.json
+
+Wasted call — file unchanged since your last Read. Refer to that earlier tool_result instead.
+
+Run command npm uninstall @next-auth/prisma-adapter @prisma/client prisma 2>&1 | tail -15
+
+npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm warn allow-scripts 6 packages have install scripts not yet covered by allowScripts:
+npm warn allow-scripts   @parcel/watcher@2.5.4 (install: node-gyp rebuild)
+npm warn allow-scripts   @swc/core@1.15.8 (postinstall: node postinstall.js)
+npm warn allow-scripts   es5-ext@0.10.64 (postinstall:  node -e "try{require('./_postinstall')}catch(e){}" || exit 0)
+npm warn allow-scripts   esbuild@0.25.12 (postinstall: node install.js)
+npm warn allow-scripts   sharp@0.34.5 (install: node install/check.js || npm run build)
+npm warn allow-scripts   unrs-resolver@1.11.1 (postinstall: napi-postinstall unrs-resolver 1.11.1 check)
+npm warn allow-scripts
+npm warn allow-scripts Run `npm approve-scripts --allow-scripts-pending` to review, or `npm approve-scripts <pkg>` to allow.
+
+Now let's remove the db:* Prisma scripts from package.json and check current state.
+
+Read file package.json
+
+1	{
+2	  "name": "nextjs_tailwind_shadcn_ts",
+3	  "version": "0.2.1",
+4	  "private": true,
+5	  "scripts": {
+6	    "dev": "next dev -p 3000 2>&1 | tee dev.log",
+7	    "build": "next build",
+8	    "start": "next start",
+9	    "lint": "eslint ."
+10	  },
+11	  "dependencies": {
+12	    "@dnd-kit/core": "^6.3.1",
+13	    "@dnd-kit/sortable": "^10.0.0",
+14	    "@dnd-kit/utilities": "^3.2.2",
+15	    "@hookform/resolvers": "^5.1.1",
+
+Good, the db:* scripts are already gone (auto-removed). Now let's write the Drizzle schema, client, and config files.
+
+Edited 3 files
+
+Edit file db/schema.ts
+
+Edit file db/index.ts
+
+Edit file drizzle.config.ts
+
+Now let's remove the old Prisma schema and update src/lib/db.ts to export the new Drizzle client.
+
+Read file src/lib/db.ts
+
+1	import { PrismaClient } from '@prisma/client'
+2	
+3	const globalForPrisma = globalThis as unknown as {
+4	  prisma: PrismaClient | undefined
+5	}
+6	
+7	export const db =
+8	  globalForPrisma.prisma ??
+9	  new PrismaClient({
+10	    log: ['query'],
+11	  })
+12	
+13	if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+
+Run command rm /opt/build/repo/src/lib/db.ts && rm -rf /opt/build/repo/prisma && echo done
+
+done
+
+Now let's rewrite auth-options.ts to use Drizzle.
+
+Edited 2 files
+
+Edit file src/lib/auth-options.ts
+
+Edit file src/lib/auth-options.ts
+
+Now the events.signIn block in the same file (login notification email logic):
+
+Run command grep -n "db\.\(user\|loginLog\)" /opt/build/repo/src/lib/auth-options.ts
+
+88:          const u = await db.user.findUnique({ where: { email: user.email } })
+91:          const log = await db.loginLog.findFirst({
+119:          await db.loginLog.update({
+
+Read file src/lib/auth-options.ts
+
+80	  secret: process.env.NEXTAUTH_SECRET,
+81	  events: {
+82	    async signIn({ user, account }) {
+83	      // Fire-and-forget: send login notification email
+84	      // Login succeeds even if email fails
+85	      ;(async () => {
+86	        try {
+87	          if (!user?.email) return
+88	          const u = await db.user.findUnique({ where: { email: user.email } })
+89	          if (!u) return
+90	
+91	          const log = await db.loginLog.findFirst({
+92	            where: { userId: u.id, status: 'success' },
+93	            orderBy: { createdAt: 'desc' },
+94	          })
+95	          if (!log) return
+96	
+97	          const ts = formatLoginTimestamp(log.createdAt)
+98	          const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '') || 'http://localhost:3000'
+99	
+100	          const emailPayload = loginNotificationEmail({
+101	            fullName: u.name || user.name || 'User',
+102	            email: user.email,
+103	            loginDate: ts.date,
+104	            loginTime: ts.time,
+105	            device: log.device || 'Unknown',
+106	            browser: log.browser || 'Unknown',
+107	            os: log.os || 'Unknown',
+108	            ipAddress: log.ipAddress || 'Not recorded',
+109	            country: log.country || 'Unknown',
+110	            city: log.city || 'Unknown',
+111	            loginMethod: account?.provider || 'google',
+112	            sessionId: log.sessionId || 'N/A',
+113	            timezone: ts.timezoneName,
+114	            dashboardUrl: baseUrl + '/dashboard',
+115	            securityUrl: baseUrl + '/dashboard/login-history',
+116	          })
+117	
+118	          const result = await sendGtgsEmail(emailPayload)
+119	          await db.loginLog.update({
+120	            where: { id: log.id },
+121	            data: { emailSent: result.sent, emailError: result.sent ? null : `Failed via ${result.method}` },
+122	          })
+123	        } catch (err) {
+124	          console.error('[AUTH EVENT] Login notification error:', err)
+
+Edited 2 files
+
+Now let's rewrite applications/route.ts.
+
+Edit file src/app/api/applications/route.ts
+
+The file /opt/build/repo/src/app/api/applications/route.ts has been updated successfully. (file state is current in your context — no need to Read it back)
+
+Run command grep -n "export" /opt/build/repo/src/lib/email.ts 2>/dev/null || find /opt/build/repo/src/lib -iname "email*"
+
+Good, applicationStatusEmail does exist in @/lib/email — this was a pre-existing bug (used but never imported). My import fix resolves it as a side effect. Now let's rewrite the GET/POST/PATCH handlers.
+
+Read file src/app/api/applications/route.ts
+
+1	import { NextRequest, NextResponse } from 'next/server'
+2	import { getServerSession } from 'next-auth'
+3	import { and, count, desc, eq, ilike, inArray, or } from 'drizzle-orm'
+4	import { authOptions } from '@/lib/auth-options'
+5	import { db } from '@db/index'
+6	import { applications, users } from '@db/schema'
+7	import { sendEmail, applicationReceivedEmail, applicationStatusEmail } from '@/lib/email'
+8	
+9	export async function GET(request: NextRequest) {
+10	  const session = await getServerSession(authOptions)
+11	  const userRole = (session?.user as Record<string, unknown>)?.role as string | undefined
+12	
+13	  // Only admin/staff can list all applications; students see their own
+14	  if (userRole !== 'admin' && userRole !== 'staff') {
+15	    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+16	  }
+17	
+18	  const { searchParams } = new URL(request.url)
+19	  const page = parseInt(searchParams.get('page') || '1', 10)
+20	  const limit = parseInt(searchParams.get('limit') || '10', 10)
+21	  const status = searchParams.get('status') || ''
+22	  const search = searchParams.get('search') || ''
+23	
+24	  const where: Record<string, unknown> = {}
+25	  if (status && status !== 'all') {
+26	    where.status = status
+27	  }
+28	  if (search) {
+29	    where.OR = [
+30	      { fullName: { contains: search } },
+31	      { email: { contains: search } },
+32	      { department: { contains: search } },
+33	    ]
+34	  }
+35	
+36	  const total = await db.application.count({ where })
+37	  const applications = await db.application.findMany({
+38	    where,
+39	    orderBy: { createdAt: 'desc' },
+40	    skip: (page - 1) * limit,
+41	    take: limit,
+42	    select: {
+43	      id: true,
+44	      fullName: true,
+45	      email: true,
+46	      phoneNumber: true,
+47	      gender: true,
+48	      department: true,
+49	      experienceLevel: true,
+50	      status: true,
+51	      createdAt: true,
+52	      userId: true,
+53	      user: { select: { name: true, image: true } },
+54	    },
+55	  })
+56	
+57	  return NextResponse.json({
+58	    applications: applications.map((a) => ({
+59	      ...a,
+60	      date: a.createdAt.toISOString().split('T')[0],
+61	      name: a.fullName,
+62	      programme: a.department,
+63	      qualification: a.experienceLevel,
+64	      documents: [],
+65	    })),
+66	    total,
+67	    page,
+68	    totalPages: Math.ceil(total / limit),
+69	  })
+70	}
+71	
+72	export async function POST(request: NextRequest) {
+73	  const session = await getServerSession(authOptions)
+74	  if (!session?.user) {
+75	    return NextResponse.json({ error: 'You must be logged in to apply' }, { status: 401 })
+76	  }
+77	
+78	  const userId = (session.user as Record<string, unknown>).id as string
+79	  const body = await request.json()
+80	  const { fullName, email, phoneNumber, gender, residentialAddress, department, experienceLevel, personalStatement } = body
+81	
+82	  if (!fullName || !email || !phoneNumber || !department) {
+83	    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+84	  }
+85	
+86	  // Check for existing application
+87	  const existing = await db.application.findFirst({
+88	    where: { userId, status: { in: ['pending', 'approved'] } },
+89	  })
+90	  if (existing) {
+91	    return NextResponse.json({ error: 'You already have an active application' }, { status: 409 })
+92	  }
+93	
+94	  const application = await db.application.create({
+95	    data: {
+96	      fullName,
+97	      email,
+98	      phoneNumber,
+99	      gender,
+100	      residentialAddress,
+101	      department,
+102	      experienceLevel,
+103	      personalStatement,
+104	      userId,
+105	    },
+106	  })
+107	
+108	  // Send confirmation email
+109	  if (fullName) {
+110	    sendEmail(applicationReceivedEmail(fullName, email, department)).catch(() => {})
+111	  }
+112	
+113	  return NextResponse.json({ success: true, applicationId: application.id }, { status: 201 })
+114	}
+115	
+116	export async function PATCH(request: NextRequest) {
+117	  const session = await getServerSession(authOptions)
+118	  const userRole = (session?.user as Record<string, unknown>)?.role as string | undefined
+119	  if (userRole !== 'admin' && userRole !== 'staff') {
+120	    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+121	  }
+122	
+123	  const body = await request.json()
+124	  const { ids, status, reason } = body
+125	
+126	  if (!ids || !Array.isArray(ids) || !status) {
+127	    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+128	  }
+129	
+130	  const reviewerId = (session.user as Record<string, unknown>).id as string
+131	  const now = new Date()
+132	
+133	  await db.application.updateMany({
+134	    where: { id: { in: ids } },
+135	    data: {
+136	      status,
+137	      reviewedBy: reviewerId,
+138	      reviewedAt: now,
+139	      ...(status === 'rejected' && reason ? { rejectionReason: reason } : {}),
+140	    },
+141	  })
+142	
+143	  // Send status emails for each updated application
+144	  const applications = await db.application.findMany({
+145	    where: { id: { in: ids } },
+146	  })
+147	
+148	  for (const app of applications) {
+149	    if (app.email) {
+150	      sendEmail(
+151	        applicationStatusEmail(app.fullName, app.email, app.department || 'Unknown', status as 'approved' | 'rejected', reason)
+152	      ).catch(() => {})
+153	    }
+154	  }
+155	
+156	  return NextResponse.json({ success: true, updated: ids.length, status })
+157	}
+158
+
+Edit file src/app/api/applications/route.ts
+
+The file /opt/build/repo/src/app/api/applications/route.ts has been updated successfully. (file state is current in your context — no need to Read it back)
+
+Now applications/[id]/route.ts:
+
+Edit file src/app/api/applications/[id]/route.ts
+
+The file /opt/build/repo/src/app/api/applications/[id]/route.ts has been updated successfully. (file state is current in your context — no need to Read it back)
+
+Now admin/security/route.ts:
+
+Edit file src/app/api/admin/security/route.ts
+
+The file /opt/build/repo/src/app/api/admin/security/route.ts has been updated successfully. (file state is current in your context — no need to Read it back)
+
+Now login-history/route.ts, login-history/sign-out-others/route.ts, users/route.ts, auth/enrich-login/route.ts, and campaigns/[id]/route.ts.
+
+Edited 4 files
+
+Edit file src/app/api/login-history/route.ts
+
+Edit file src/app/api/login-history/sign-out-others/route.ts
+
+Edit file src/app/api/users/route.ts
+
+Edit file src/app/api/auth/enrich-login/route.ts
+
+Cancelling execution
+
