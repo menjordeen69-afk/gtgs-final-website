@@ -11,6 +11,7 @@ import Departments from '@/components/gtgs/Departments'
 import CoursesOffered from '@/components/gtgs/CoursesOffered'
 import Facilities from '@/components/gtgs/Facilities'
 import StudentLife from '@/components/gtgs/StudentLife'
+import LivePracticals from '@/components/gtgs/LivePracticals'
 import AdmissionPortal from '@/components/gtgs/AdmissionPortal'
 import FAQ from '@/components/gtgs/FAQ'
 import Donation from '@/components/gtgs/Donation'
@@ -50,6 +51,7 @@ export default function Home() {
         <CoursesOffered onApplyClick={() => setShowAdmission(true)} />
         <Facilities />
         <StudentLife />
+        <LivePracticals />
         <FAQ />
         <Donation />
       </main>

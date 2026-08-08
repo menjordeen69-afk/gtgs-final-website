@@ -366,6 +366,28 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
+                            {app.status === 'pending' && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="size-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                  title="Approve"
+                                  onClick={() => updateStatus(app.id, 'approved')}
+                                >
+                                  <CheckCircle className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="size-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Reject"
+                                  onClick={() => updateStatus(app.id, 'rejected')}
+                                >
+                                  <XCircle className="size-4" />
+                                </Button>
+                              </>
+                            )}
                             <Button variant="ghost" size="sm" onClick={() => setSelectedApp(app)}>
                               <Eye className="mr-1 size-3.5" /> <span className="hidden lg:inline">View</span>
                             </Button>
