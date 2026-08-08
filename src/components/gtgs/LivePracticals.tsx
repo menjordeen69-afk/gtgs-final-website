@@ -1,27 +1,20 @@
 'use client'
 
-import Image from 'next/image'
-import { UtensilsCrossed, Scissors, Camera } from 'lucide-react'
+import { UtensilsCrossed, Scissors, Camera, Play } from 'lucide-react'
 import FadeInView from '@/components/ui/fade-in-view'
 
-const PRACTICALS = [
+const VIDEOS = [
   {
     department: 'Catering & Hospitality',
     icon: UtensilsCrossed,
     description: 'Students gain real-world culinary experience through hands-on food preparation, event catering, and professional kitchen training.',
-    images: [
-      { src: '/practicals/catering-1.jpg', alt: 'GTGS catering student in uniform' },
-      { src: '/practicals/catering-2.jpg', alt: 'GTGS catering student showcasing skills' },
-      { src: '/practicals/catering-3.jpg', alt: 'GTGS catering student in professional attire' },
-      { src: '/practicals/catering-4.jpg', alt: 'GTGS catering students together' },
-      { src: '/practicals/catering-5.jpg', alt: 'GTGS catering students in uniform' },
-    ],
+    video: '/practicals/catering-video.mp4',
   },
   {
     department: 'Cosmetology & Beauty',
     icon: Scissors,
     description: 'Practical training in hairdressing, beauty therapy, and makeup artistry using professional tools and real clients.',
-    images: [],
+    video: null,
   },
 ]
 
@@ -54,14 +47,13 @@ export default function LivePracticals() {
         </FadeInView>
 
         <div className="space-y-16 sm:space-y-20">
-          {PRACTICALS.map((section, sectionIdx) => {
+          {VIDEOS.map((section, sectionIdx) => {
             const Icon = section.icon
-            const isReversed = sectionIdx % 2 === 1
             return (
               <FadeInView key={section.department} delay={sectionIdx * 150}>
-                <div className={`flex flex-col gap-8 lg:flex-row lg:items-center lg:gap-12 ${isReversed ? 'lg:flex-row-reverse' : ''}`}>
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-12">
                   {/* Text side */}
-                  <div className={`lg:w-1/3 ${isReversed ? 'lg:text-left' : 'lg:text-left'}`}>
+                  <div className="lg:w-1/3">
                     <div className="mb-3 inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2">
                       <Icon className="size-4 text-gtgs-gold" aria-hidden="true" />
                       <span className="text-sm font-bold text-white">{section.department}</span>
@@ -71,33 +63,26 @@ export default function LivePracticals() {
                     </p>
                   </div>
 
-                  {/* Photos grid */}
+                  {/* Video / Placeholder */}
                   <div className="lg:w-2/3">
-                    {section.images.length > 0 ? (
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-                        {section.images.map((img, i) => (
-                          <div
-                            key={img.src}
-                            className={`relative overflow-hidden rounded-2xl bg-white/5 shadow-lg ${
-                              i === 0 ? 'col-span-2 sm:col-span-1 sm:row-span-2 aspect-[3/4]' : 'aspect-square'
-                            }`}
-                          >
-                            <Image
-                              src={img.src}
-                              alt={img.alt}
-                              fill
-                              className="object-cover transition-transform duration-500 hover:scale-105"
-                              sizes="(max-width: 768px) 50vw, 33vw"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-gtgs-navy/30 to-transparent" />
-                          </div>
-                        ))}
+                    {section.video ? (
+                      <div className="relative overflow-hidden rounded-2xl bg-white/5 shadow-2xl">
+                        <video
+                          controls
+                          preload="metadata"
+                          poster=""
+                          className="aspect-video w-full object-cover"
+                          playsInline
+                        >
+                          <source src={section.video} type="video/mp4" />
+                          Your browser does not support the video tag.
+                        </video>
                       </div>
                     ) : (
                       <div className="flex aspect-video items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-white/5">
                         <div className="text-center">
                           <Camera className="mx-auto mb-2 size-8 text-white/20" aria-hidden="true" />
-                          <p className="text-sm text-white/30">More practical photos coming soon</p>
+                          <p className="text-sm text-white/30">More practical videos coming soon</p>
                         </div>
                       </div>
                     )}
