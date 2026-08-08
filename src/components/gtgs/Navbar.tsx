@@ -21,6 +21,7 @@ const NAV_LINKS = [
   { label: 'Why GTGS', href: '#why-gtgs' },
   { label: 'Student Life', href: '#student-life' },
   { label: 'Practicals', href: '#practicals' },
+  { label: 'Our Team', href: '#team' },
   { label: 'FAQ', href: '#faq' },
   { label: 'Support Us', href: '#donation' },
 ] as const
