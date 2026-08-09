@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Lock, Download, Eye, X, CheckCircle, XCircle, FileText, LogOut, Users, Shield, Trash2, RefreshCw, Search, Paperclip } from 'lucide-react'
+import { Lock, Download, Eye, X, CheckCircle, XCircle, FileText, LogOut, Users, Shield, Trash2, RefreshCw, Search, Paperclip, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -235,6 +235,10 @@ export default function AdminPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => window.location.href = '/'} title="Back to Home">
+              <ArrowLeft className="mr-1.5 size-3.5" />
+              <span className="hidden sm:inline">Home</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={refreshData} title="Refresh">
               <RefreshCw className="mr-1.5 size-3.5" />
               <span className="hidden sm:inline">Refresh</span>
@@ -371,20 +375,22 @@ export default function AdminPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="size-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                  className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                   title="Approve"
                                   onClick={() => updateStatus(app.id, 'approved')}
                                 >
-                                  <CheckCircle className="size-4" />
+                                  <CheckCircle className="mr-1 size-3.5" />
+                                  <span className="hidden lg:inline text-xs font-medium">Approve</span>
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="size-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                                   title="Reject"
                                   onClick={() => updateStatus(app.id, 'rejected')}
                                 >
-                                  <XCircle className="size-4" />
+                                  <XCircle className="mr-1 size-3.5" />
+                                  <span className="hidden lg:inline text-xs font-medium">Decline</span>
                                 </Button>
                               </>
                             )}

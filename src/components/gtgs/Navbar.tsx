@@ -61,9 +61,12 @@ export default function Navbar({ onApplyClick }: NavbarProps) {
         className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-8"
         aria-label="Main navigation"
       >
-        <a href="#home" className="flex items-center gap-2 transition-opacity hover:opacity-80" aria-label="GTGS Home">
-          <Image src="/gtgs-logo.jpg" alt="GTGS Logo" width={36} height={36} className="size-7 rounded-sm object-contain sm:size-8 md:size-9" priority />
-          <span className="text-gradient-gold text-lg font-extrabold tracking-tight sm:text-xl md:text-2xl">GTGS</span>
+        <a href="#home" className="flex items-center gap-2.5 transition-opacity hover:opacity-80" aria-label="GTGS Home">
+          <Image src="/gtgs-logo.jpg" alt="GTGS Logo" width={36} height={36} className="size-8 rounded-sm object-contain sm:size-9 md:size-9" priority />
+          <div className="flex flex-col leading-none">
+            <span className="text-[13px] font-extrabold tracking-tight text-white sm:text-sm md:text-base">Global Technology</span>
+            <span className="text-[11px] font-semibold tracking-wide text-gtgs-gold sm:text-xs md:text-[13px]"><span className="text-white/70">&</span> General Services</span>
+          </div>
         </a>
 
         <ul className="hidden items-center gap-1 xl:flex" role="menubar">
@@ -112,7 +115,10 @@ export default function Navbar({ onApplyClick }: NavbarProps) {
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2 text-white">
                   <Image src="/gtgs-logo.jpg" alt="GTGS Logo" width={24} height={24} className="size-5 rounded-sm object-contain" />
-                  <span className="text-gradient-gold font-extrabold">GTGS</span>
+                  <div className="flex flex-col leading-none">
+                    <span className="text-sm font-extrabold text-white">Global Technology</span>
+                    <span className="text-[11px] font-semibold text-gtgs-gold"><span className="text-white/70">&</span> General Services</span>
+                  </div>
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-1 px-4" aria-label="Mobile navigation">
