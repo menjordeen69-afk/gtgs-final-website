@@ -43,7 +43,7 @@ export default function HeroSection({ onApplyClick }: HeroSectionProps) {
           className="hero-text-animate mb-3 text-[26px] leading-[1.15] font-extrabold tracking-tight text-white sm:mb-5 sm:text-4xl sm:leading-[1.15] md:text-5xl md:leading-[1.1] lg:text-6xl xl:text-7xl"
           style={{ animationDelay: '0.4s' }}
         >
-          Empowering Skills.
+          Empowering People.
           <span className="text-gradient-gold"> Transforming Lives.</span>
           <br className="sm:hidden md:inline" />
           {' '}Building the Future.

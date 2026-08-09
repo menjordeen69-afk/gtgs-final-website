@@ -195,7 +195,7 @@ export default function Footer() {
             &copy; {currentYear} Global Technology & General Services. All rights reserved.
           </p>
           <p className="text-[10px] text-white/40 sm:text-xs">
-            Empowering Skills. Transforming Lives. Building the Future.
+            Empowering People. Transforming Lives. Building the Future.
           </p>
           <a
             href="/admin"

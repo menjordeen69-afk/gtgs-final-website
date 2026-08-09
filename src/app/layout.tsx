@@ -65,7 +65,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "GTGS | Global Technology & General Services",
     description:
-      "Empowering Skills. Transforming Lives. Building the Future. Practical vocational training in Sierra Leone.",
+      "Empowering People. Transforming Lives. Building the Future. Practical vocational training in Sierra Leone.",
     url: "https://gtgs.edu.sl",
     siteName: "GTGS",
     type: "website",
@@ -83,7 +83,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "GTGS | Global Technology & General Services",
     description:
-      "Empowering Skills. Transforming Lives. Building the Future. Apply now for practical vocational training in Sierra Leone.",
+      "Empowering People. Transforming Lives. Building the Future. Apply now for practical vocational training in Sierra Leone.",
     images: ["/og-image.png"],
   },
   metadataBase: new URL("https://gtgs.edu.sl"),
@@ -113,7 +113,7 @@ export default function RootLayout({
     sameAs: [
       "https://www.tiktok.com/@globaltechnology.sl",
     ],
-    slogan: "Empowering Skills. Transforming Lives. Building the Future.",
+    slogan: "Empowering People. Transforming Lives. Building the Future.",
     knowsAbout: [
       "ICT Fundamentals",
       "Graphic Design",
