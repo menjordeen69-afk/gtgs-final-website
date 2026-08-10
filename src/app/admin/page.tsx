@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Lock, Download, Eye, X, CheckCircle, XCircle, FileText, LogOut, Users, Shield, Trash2, RefreshCw, Search, Paperclip, ArrowLeft } from 'lucide-react'
+import { Lock, Download, Eye, X, CheckCircle, XCircle, FileText, LogOut, Users, Shield, Trash2, RefreshCw, Search, Paperclip, ArrowLeft, FileStack, Megaphone } from 'lucide-react'
+import PostsManager from '@/components/admin/PostsManager'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -61,6 +62,7 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'applications' | 'posts'>('applications')
 
   async function login() {
     setLoading(true)
@@ -166,7 +168,6 @@ export default function AdminPage() {
     if (e.key === 'Enter') login()
   }
 
-  // Filtered applications
   const filtered = applications
     .filter(a => {
       if (statusFilter !== 'all' && a.status !== statusFilter) return false
@@ -198,14 +199,7 @@ export default function AdminPage() {
           <CardContent className="space-y-4">
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                type="password"
-                placeholder="Admin password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="pl-10"
-              />
+              <Input type="password" placeholder="Admin password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={handleKeyDown} className="pl-10" />
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
             <Button onClick={login} disabled={loading || !password} className="w-full bg-gtgs-navy hover:bg-gtgs-blue">
@@ -221,8 +215,14 @@ export default function AdminPage() {
   const approved = applications.filter(a => a.status === 'approved').length
   const rejected = applications.filter(a => a.status === 'rejected').length
 
+  const tabs = [
+    { key: 'applications' as const, label: 'Applications', icon: FileStack },
+    { key: 'posts' as const, label: 'Content Manager', icon: Megaphone },
+  ]
+
   return (
     <div className="min-h-screen bg-muted/30">
+      {/* Header */}
       <header className="sticky top-0 z-40 border-b bg-white shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
@@ -231,7 +231,7 @@ export default function AdminPage() {
             </div>
             <div>
               <h1 className="text-base font-bold text-gtgs-navy sm:text-lg">Admin Dashboard</h1>
-              <p className="text-[11px] text-muted-foreground">GTGS Application Management</p>
+              <p className="text-[11px] text-muted-foreground">GTGS Management</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -253,174 +253,162 @@ export default function AdminPage() {
             </Button>
           </div>
         </div>
+        {/* Tab Bar */}
+        <div className="mx-auto flex max-w-7xl">
+          {tabs.map((tab) => {
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-xs font-semibold transition-colors sm:text-sm ${
+                  activeTab === tab.key
+                    ? 'border-gtgs-navy text-gtgs-navy'
+                    : 'border-transparent text-muted-foreground hover:text-gtgs-navy'
+                }`}
+              >
+                <Icon className="size-3.5" /> {tab.label}
+              </button>
+            )
+          })}
+        </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Stats Cards */}
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-          <Card className="p-4 sm:p-5">
-            <div className="flex items-center gap-2">
-              <Users className="size-5 text-gtgs-blue" />
-              <p className="text-2xl font-extrabold text-gtgs-navy">{applications.length}</p>
+        {activeTab === 'applications' && (
+          <div className="space-y-4">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+              <Card className="p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <Users className="size-5 text-gtgs-blue" />
+                  <p className="text-2xl font-extrabold text-gtgs-navy">{applications.length}</p>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Total Applications</p>
+              </Card>
+              <Card className="p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <FileText className="size-5 text-amber-500" />
+                  <p className="text-2xl font-extrabold text-gtgs-navy">{pending}</p>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Pending Review</p>
+              </Card>
+              <Card className="p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="size-5 text-emerald-500" />
+                  <p className="text-2xl font-extrabold text-gtgs-navy">{approved}</p>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Approved</p>
+              </Card>
+              <Card className="p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <XCircle className="size-5 text-red-500" />
+                  <p className="text-2xl font-extrabold text-gtgs-navy">{rejected}</p>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Rejected</p>
+              </Card>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Total Applications</p>
-          </Card>
-          <Card className="p-4 sm:p-5">
-            <div className="flex items-center gap-2">
-              <FileText className="size-5 text-amber-500" />
-              <p className="text-2xl font-extrabold text-gtgs-navy">{pending}</p>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Pending Review</p>
-          </Card>
-          <Card className="p-4 sm:p-5">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="size-5 text-emerald-500" />
-              <p className="text-2xl font-extrabold text-gtgs-navy">{approved}</p>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Approved</p>
-          </Card>
-          <Card className="p-4 sm:p-5">
-            <div className="flex items-center gap-2">
-              <XCircle className="size-5 text-red-500" />
-              <p className="text-2xl font-extrabold text-gtgs-navy">{rejected}</p>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Rejected</p>
-          </Card>
-        </div>
 
-        {/* Search and Filter */}
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, email, phone, department, or ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <div className="flex gap-2">
-            {['all', 'pending', 'approved', 'rejected'].map(s => (
-              <Button
-                key={s}
-                variant={statusFilter === s ? 'default' : 'outline'}
-                size="sm"
-                className={statusFilter === s ? 'bg-gtgs-navy hover:bg-gtgs-blue' : ''}
-                onClick={() => setStatusFilter(s)}
-              >
-                {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* Applications Table */}
-        <Card>
-          <CardContent className="p-0">
-            {filtered.length === 0 ? (
-              <div className="py-16 text-center">
-                <FileText className="mx-auto mb-3 size-10 text-muted-foreground/30" />
-                <p className="text-sm text-muted-foreground">
-                  {applications.length === 0 ? 'No applications received yet.' : 'No applications match your search.'}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground/60">
-                  {applications.length === 0 ? 'Applications submitted through the portal will appear here.' : 'Try adjusting your search or filter.'}
-                </p>
+            {/* Search and Filter */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input placeholder="Search by name, email, phone, department, or ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b bg-muted/50">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold text-gtgs-navy">Applicant</th>
-                      <th className="hidden px-4 py-3 font-semibold text-gtgs-navy sm:table-cell">Department</th>
-                      <th className="hidden px-4 py-3 font-semibold text-gtgs-navy md:table-cell">Documents</th>
-                      <th className="px-4 py-3 font-semibold text-gtgs-navy">Status</th>
-                      <th className="hidden px-4 py-3 font-semibold text-gtgs-navy md:table-cell">Date</th>
-                      <th className="px-4 py-3 font-semibold text-gtgs-navy">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {filtered.map((app) => (
-                      <tr key={app.id} className="hover:bg-muted/30">
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-gtgs-navy">{app.fullName}</p>
-                          <p className="text-xs text-muted-foreground">{app.email}</p>
-                        </td>
-                        <td className="hidden px-4 py-3 sm:table-cell">
-                          <span className="text-sm">{app.department}</span>
-                        </td>
-                        <td className="hidden px-4 py-3 md:table-cell">
-                          {app.documents && app.documents.length > 0 ? (
-                            <div className="flex items-center gap-1">
-                              <Paperclip className="size-3.5 text-muted-foreground" />
-                              <span className="text-xs text-muted-foreground">{app.documents.length} file{app.documents.length > 1 ? 's' : ''}</span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">None</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[app.status] || ''}`}>
-                            {app.status}
-                          </Badge>
-                        </td>
-                        <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">
-                          {new Date(app.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            {app.status === 'pending' && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                  title="Approve"
-                                  onClick={() => updateStatus(app.id, 'approved')}
-                                >
-                                  <CheckCircle className="mr-1 size-3.5" />
-                                  <span className="hidden lg:inline text-xs font-medium">Approve</span>
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Reject"
-                                  onClick={() => updateStatus(app.id, 'rejected')}
-                                >
-                                  <XCircle className="mr-1 size-3.5" />
-                                  <span className="hidden lg:inline text-xs font-medium">Decline</span>
-                                </Button>
-                              </>
-                            )}
-                            <Button variant="ghost" size="sm" onClick={() => setSelectedApp(app)}>
-                              <Eye className="mr-1 size-3.5" /> <span className="hidden lg:inline">View</span>
-                            </Button>
-                            {deleteConfirm === app.id ? (
+              <div className="flex gap-2">
+                {['all', 'pending', 'approved', 'rejected'].map(s => (
+                  <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" className={statusFilter === s ? 'bg-gtgs-navy hover:bg-gtgs-blue' : ''} onClick={() => setStatusFilter(s)}>
+                    {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Applications Table */}
+            <Card>
+              <CardContent className="p-0">
+                {filtered.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <FileText className="mx-auto mb-3 size-10 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground">{applications.length === 0 ? 'No applications received yet.' : 'No applications match your search.'}</p>
+                    <p className="mt-1 text-xs text-muted-foreground/60">{applications.length === 0 ? 'Applications submitted through the portal will appear here.' : 'Try adjusting your search or filter.'}</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b bg-muted/50">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold text-gtgs-navy">Applicant</th>
+                          <th className="hidden px-4 py-3 font-semibold text-gtgs-navy sm:table-cell">Department</th>
+                          <th className="hidden px-4 py-3 font-semibold text-gtgs-navy md:table-cell">Documents</th>
+                          <th className="px-4 py-3 font-semibold text-gtgs-navy">Status</th>
+                          <th className="hidden px-4 py-3 font-semibold text-gtgs-navy md:table-cell">Date</th>
+                          <th className="px-4 py-3 font-semibold text-gtgs-navy">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {filtered.map((app) => (
+                          <tr key={app.id} className="hover:bg-muted/30">
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-gtgs-navy">{app.fullName}</p>
+                              <p className="text-xs text-muted-foreground">{app.email}</p>
+                            </td>
+                            <td className="hidden px-4 py-3 sm:table-cell"><span className="text-sm">{app.department}</span></td>
+                            <td className="hidden px-4 py-3 md:table-cell">
+                              {app.documents && app.documents.length > 0 ? (
+                                <div className="flex items-center gap-1">
+                                  <Paperclip className="size-3.5 text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">{app.documents.length} file{app.documents.length > 1 ? 's' : ''}</span>
+                                </div>
+                              ) : (<span className="text-xs text-muted-foreground">None</span>)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[app.status] || ''}`}>{app.status}</Badge>
+                            </td>
+                            <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">
+                              {new Date(app.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </td>
+                            <td className="px-4 py-3">
                               <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => deleteApplication(app.id)}>
-                                  Confirm
+                                {app.status === 'pending' && (
+                                  <>
+                                    <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Approve" onClick={() => updateStatus(app.id, 'approved')}>
+                                      <CheckCircle className="mr-1 size-3.5" />
+                                      <span className="hidden lg:inline text-xs font-medium">Approve</span>
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50" title="Reject" onClick={() => updateStatus(app.id, 'rejected')}>
+                                      <XCircle className="mr-1 size-3.5" />
+                                      <span className="hidden lg:inline text-xs font-medium">Decline</span>
+                                    </Button>
+                                  </>
+                                )}
+                                <Button variant="ghost" size="sm" onClick={() => setSelectedApp(app)}>
+                                  <Eye className="mr-1 size-3.5" /> <span className="hidden lg:inline">View</span>
                                 </Button>
-                                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(null)}>
-                                  Cancel
-                                </Button>
+                                {deleteConfirm === app.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => deleteApplication(app.id)}>Confirm</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+                                  </div>
+                                ) : (
+                                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => setDeleteConfirm(app.id)}>
+                                    <Trash2 className="size-3.5" />
+                                  </Button>
+                                )}
                               </div>
-                            ) : (
-                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => setDeleteConfirm(app.id)}>
-                                <Trash2 className="size-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === 'posts' && <PostsManager password={password} />}
       </main>
 
       {/* Application Detail Modal */}
@@ -434,52 +422,22 @@ export default function AdminPage() {
               </div>
               <Button variant="ghost" size="icon" onClick={() => setSelectedApp(null)}><X className="size-4" /></Button>
             </div>
-
             <div className="space-y-3 text-sm">
-              <div className="flex justify-between border-b py-2">
-                <span className="text-muted-foreground">Full Name</span>
-                <span className="font-medium text-gtgs-navy">{selectedApp.fullName}</span>
-              </div>
-              <div className="flex justify-between border-b py-2">
-                <span className="text-muted-foreground">Gmail</span>
-                <span className="font-medium text-gtgs-navy">{selectedApp.email}</span>
-              </div>
-              <div className="flex justify-between border-b py-2">
-                <span className="text-muted-foreground">Phone</span>
-                <span className="font-medium text-gtgs-navy">{selectedApp.phoneNumber}</span>
-              </div>
-              <div className="flex justify-between border-b py-2">
-                <span className="text-muted-foreground">Gender</span>
-                <span className="font-medium text-gtgs-navy">{selectedApp.gender || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between border-b py-2">
-                <span className="text-muted-foreground">Date of Birth</span>
-                <span className="font-medium text-gtgs-navy">{selectedApp.dateOfBirth || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between border-b py-2">
-                <span className="text-muted-foreground">Address</span>
-                <span className="font-medium text-gtgs-navy">{selectedApp.residentialAddress || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between border-b py-2">
-                <span className="text-muted-foreground">Department</span>
-                <span className="font-medium text-gtgs-navy">{selectedApp.department}</span>
-              </div>
-              <div className="flex justify-between border-b py-2">
-                <span className="text-muted-foreground">Experience</span>
-                <span className="font-medium text-gtgs-navy">{selectedApp.experienceLevel || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between border-b py-2">
-                <span className="text-muted-foreground">Submitted</span>
-                <span className="font-medium text-gtgs-navy">{new Date(selectedApp.submittedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-              </div>
+              <div className="flex justify-between border-b py-2"><span className="text-muted-foreground">Full Name</span><span className="font-medium text-gtgs-navy">{selectedApp.fullName}</span></div>
+              <div className="flex justify-between border-b py-2"><span className="text-muted-foreground">Gmail</span><span className="font-medium text-gtgs-navy">{selectedApp.email}</span></div>
+              <div className="flex justify-between border-b py-2"><span className="text-muted-foreground">Phone</span><span className="font-medium text-gtgs-navy">{selectedApp.phoneNumber}</span></div>
+              <div className="flex justify-between border-b py-2"><span className="text-muted-foreground">Gender</span><span className="font-medium text-gtgs-navy">{selectedApp.gender || 'N/A'}</span></div>
+              <div className="flex justify-between border-b py-2"><span className="text-muted-foreground">Date of Birth</span><span className="font-medium text-gtgs-navy">{selectedApp.dateOfBirth || 'N/A'}</span></div>
+              <div className="flex justify-between border-b py-2"><span className="text-muted-foreground">Address</span><span className="font-medium text-gtgs-navy">{selectedApp.residentialAddress || 'N/A'}</span></div>
+              <div className="flex justify-between border-b py-2"><span className="text-muted-foreground">Department</span><span className="font-medium text-gtgs-navy">{selectedApp.department}</span></div>
+              <div className="flex justify-between border-b py-2"><span className="text-muted-foreground">Experience</span><span className="font-medium text-gtgs-navy">{selectedApp.experienceLevel || 'N/A'}</span></div>
+              <div className="flex justify-between border-b py-2"><span className="text-muted-foreground">Submitted</span><span className="font-medium text-gtgs-navy">{new Date(selectedApp.submittedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
               {selectedApp.personalStatement && (
                 <div className="border-b py-2">
                   <p className="text-muted-foreground">Personal Statement</p>
                   <p className="mt-1 text-sm text-gtgs-navy leading-relaxed">{selectedApp.personalStatement}</p>
                 </div>
               )}
-
-              {/* Documents Section */}
               {selectedApp.documents && selectedApp.documents.length > 0 && (
                 <div className="border-b py-2">
                   <p className="mb-2 text-muted-foreground">Uploaded Documents ({selectedApp.documents.length})</p>
@@ -487,33 +445,15 @@ export default function AdminPage() {
                     {selectedApp.documents.map((doc, i) => (
                       <div key={i} className="flex items-center justify-between gap-2 rounded-lg border p-2.5">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                            <FileText className="size-4 text-muted-foreground" />
-                          </div>
+                          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><FileText className="size-4 text-muted-foreground" /></div>
                           <div className="min-w-0">
                             <p className="text-xs font-medium text-gtgs-navy truncate">{DOC_LABELS[doc.key] || doc.key}</p>
-                            <p className="text-[10px] text-muted-foreground truncate">{doc.fileName} &middot; {formatFileSize(doc.fileSize)}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{doc.fileName} · {formatFileSize(doc.fileSize)}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="size-8 p-0"
-                            title="View"
-                            onClick={() => viewDocument(doc.savedPath)}
-                          >
-                            <Eye className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="size-8 p-0"
-                            title="Download"
-                            onClick={() => downloadDocument(doc.savedPath, doc.fileName)}
-                          >
-                            <Download className="size-3.5" />
-                          </Button>
+                          <Button variant="ghost" size="sm" className="size-8 p-0" title="View" onClick={() => viewDocument(doc.savedPath)}><Eye className="size-3.5" /></Button>
+                          <Button variant="ghost" size="sm" className="size-8 p-0" title="Download" onClick={() => downloadDocument(doc.savedPath, doc.fileName)}><Download className="size-3.5" /></Button>
                         </div>
                       </div>
                     ))}
@@ -521,23 +461,15 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-
-            {/* Status Actions */}
             <div className="mt-5 flex gap-2">
               {selectedApp.status !== 'approved' && (
-                <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => updateStatus(selectedApp.id, 'approved')}>
-                  <CheckCircle className="mr-1.5 size-4" /> Approve
-                </Button>
+                <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => updateStatus(selectedApp.id, 'approved')}><CheckCircle className="mr-1.5 size-4" /> Approve</Button>
               )}
               {selectedApp.status !== 'rejected' && (
-                <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={() => updateStatus(selectedApp.id, 'rejected')}>
-                  <XCircle className="mr-1.5 size-4" /> Reject
-                </Button>
+                <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={() => updateStatus(selectedApp.id, 'rejected')}><XCircle className="mr-1.5 size-4" /> Reject</Button>
               )}
               {selectedApp.status !== 'pending' && (
-                <Button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => updateStatus(selectedApp.id, 'pending')}>
-                  Reset to Pending
-                </Button>
+                <Button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => updateStatus(selectedApp.id, 'pending')}>Reset to Pending</Button>
               )}
             </div>
           </div>

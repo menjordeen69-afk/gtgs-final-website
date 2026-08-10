@@ -22,6 +22,7 @@ const NAV_LINKS = [
   { label: 'Student Life', href: '#student-life' },
   { label: 'Practicals', href: '#practicals' },
   { label: 'Our Team', href: '#team' },
+  { label: 'Updates', href: '#announcements' },
   { label: 'FAQ', href: '#faq' },
   { label: 'Support Us', href: '#donation' },
 ] as const

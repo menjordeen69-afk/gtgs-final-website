@@ -15,6 +15,7 @@ import OurTeam from '@/components/gtgs/OurTeam'
 import LivePracticals from '@/components/gtgs/LivePracticals'
 import AdmissionPortal from '@/components/gtgs/AdmissionPortal'
 import FAQ from '@/components/gtgs/FAQ'
+import Announcements from '@/components/gtgs/Announcements'
 import Donation from '@/components/gtgs/Donation'
 import Footer from '@/components/gtgs/Footer'
 
@@ -54,6 +55,7 @@ export default function Home() {
         <StudentLife />
         <LivePracticals />
         <OurTeam />
+        <Announcements />
         <FAQ />
         <Donation />
       </main>

@@ -1,0 +1,575 @@
+     1→'use client'
+     2→
+     3→import { useState } from 'react'
+     4→import { Lock, Download, Eye, X, CheckCircle, XCircle, FileText, LogOut, Users, Shield, Trash2, RefreshCw, Search, Paperclip, ArrowLeft, FileStack, Megaphone } from 'lucide-react'
+     5→import PostsManager from '@/components/admin/PostsManager'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     9→import { Badge } from '@/components/ui/badge'
+    10→
+    11→interface Document {
+    12→  fileName: string
+    13→  fileType: string
+    14→  fileSize: number
+    15→  key: string
+    16→  savedPath: string
+    17→}
+    18→
+    19→interface Application {
+    20→  id: string
+    21→  fullName: string
+    22→  email: string
+    23→  phoneNumber: string
+    24→  gender: string
+    25→  dateOfBirth: string
+    26→  residentialAddress: string
+    27→  department: string
+    28→  experienceLevel?: string
+    29→  personalStatement?: string
+    30→  status: string
+    31→  submittedAt: string
+    32→  documents?: Document[]
+    33→}
+    34→
+    35→const STATUS_COLORS: Record<string, string> = {
+    36→  pending: 'bg-amber-100 text-amber-700 border-amber-200',
+    37→  approved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    38→  rejected: 'bg-red-100 text-red-700 border-red-200',
+    39→}
+    40→
+    41→const DOC_LABELS: Record<string, string> = {
+    42→  nationalId: 'National ID / Passport',
+    43→  wassce: 'WASSCE Certificate',
+    44→  birthCert: 'Birth Certificate',
+    45→  passportPhoto: 'Passport Photo',
+    46→  otherDoc: 'Other Document',
+    47→}
+    48→
+    49→function formatFileSize(bytes: number): string {
+    50→  if (bytes < 1024) return bytes + ' B'
+    51→  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+    52→  return (bytes / 1048576).toFixed(1) + ' MB'
+    53→}
+    54→
+    55→export default function AdminPage() {
+    56→  const [password, setPassword] = useState('')
+    57→  const [authenticated, setAuthenticated] = useState(false)
+    58→  const [loading, setLoading] = useState(false)
+    59→  const [error, setError] = useState('')
+    60→  const [applications, setApplications] = useState<Application[]>([])
+    61→  const [selectedApp, setSelectedApp] = useState<Application | null>(null)
+    62→  const [searchQuery, setSearchQuery] = useState('')
+    63→  const [statusFilter, setStatusFilter] = useState<string>('all')
+    64→  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+    65→  const [activeTab, setActiveTab] = useState<'applications' | 'posts'>('applications')
+    66→
+    67→  async function login() {
+    68→    setLoading(true)
+    69→    setError('')
+    70→    try {
+    71→      const res = await fetch('/api/admin', {
+    72→        headers: { 'Authorization': `Bearer ${password}` },
+    73→      })
+    74→      if (res.ok) {
+    75→        const json = await res.json()
+    76→        setApplications(json.applications || [])
+    77→        setAuthenticated(true)
+    78→      } else if (res.status === 429) {
+    79→        setError('Too many failed attempts. Locked for 15 minutes.')
+    80→      } else {
+    81→        const json = await res.json().catch(() => ({}))
+    82→        const remaining = (json as Record<string, unknown>).remainingAttempts
+    83→        setError(remaining ? `Incorrect password. ${remaining} attempt${Number(remaining) > 1 ? 's' : ''} remaining.` : 'Incorrect password')
+    84→      }
+    85→    } catch {
+    86→      setError('Connection failed')
+    87→    } finally {
+    88→      setLoading(false)
+    89→    }
+    90→  }
+    91→
+    92→  async function refreshData() {
+    93→    try {
+    94→      const res = await fetch('/api/admin', {
+    95→        headers: { 'Authorization': `Bearer ${password}` },
+    96→      })
+    97→      if (res.ok) {
+    98→        const json = await res.json()
+    99→        setApplications(json.applications || [])
+   100→      }
+   101→    } catch { /* ignore */ }
+   102→  }
+   103→
+   104→  async function updateStatus(id: string, status: string) {
+   105→    const res = await fetch('/api/admin', {
+   106→      method: 'PATCH',
+   107→      headers: {
+   108→        'Content-Type': 'application/json',
+   109→        'Authorization': `Bearer ${password}`,
+   110→      },
+   111→      body: JSON.stringify({ id, status }),
+   112→    })
+   113→    if (res.ok) {
+   114→      setApplications((prev) => prev.map(a => a.id === id ? { ...a, status } : a))
+   115→      if (selectedApp?.id === id) setSelectedApp((prev) => prev ? { ...prev, status } : null)
+   116→    }
+   117→  }
+   118→
+   119→  async function deleteApplication(id: string) {
+   120→    const res = await fetch(`/api/admin?id=${id}`, {
+   121→      method: 'DELETE',
+   122→      headers: { 'Authorization': `Bearer ${password}` },
+   123→    })
+   124→    if (res.ok) {
+   125→      setApplications((prev) => prev.filter(a => a.id !== id))
+   126→      if (selectedApp?.id === id) setSelectedApp(null)
+   127→      setDeleteConfirm(null)
+   128→    }
+   129→  }
+   130→
+   131→  async function downloadDocument(savedPath: string, fileName: string) {
+   132→    try {
+   133→      const res = await fetch(`/api/documents?file=${encodeURIComponent(savedPath)}`, {
+   134→        headers: { 'Authorization': `Bearer ${password}` },
+   135→      })
+   136→      if (!res.ok) return
+   137→      const blob = await res.blob()
+   138→      const url = URL.createObjectURL(blob)
+   139→      const a = document.createElement('a')
+   140→      a.href = url
+   141→      a.download = fileName
+   142→      a.click()
+   143→      URL.revokeObjectURL(url)
+   144→    } catch { /* ignore */ }
+   145→  }
+   146→
+   147→  function viewDocument(savedPath: string) {
+   148→    const url = `/api/documents?file=${encodeURIComponent(savedPath)}&token=${password}`
+   149→    window.open(url, '_blank')
+   150→  }
+   151→
+   152→  async function exportCSV() {
+   153→    const res = await fetch('/api/admin?format=csv', {
+   154→      headers: { 'Authorization': `Bearer ${password}` },
+   155→    })
+   156→    if (res.ok) {
+   157→      const blob = await res.blob()
+   158→      const url = URL.createObjectURL(blob)
+   159→      const a = document.createElement('a')
+   160→      a.href = url
+   161→      a.download = `gtgs-applications-${new Date().toISOString().slice(0, 10)}.csv`
+   162→      a.click()
+   163→      URL.revokeObjectURL(url)
+   164→    }
+   165→  }
+   166→
+   167→  function handleKeyDown(e: React.KeyboardEvent) {
+   168→    if (e.key === 'Enter') login()
+   169→  }
+   170→
+   171→  // Filtered applications
+   172→  const filtered = applications
+   173→    .filter(a => {
+   174→      if (statusFilter !== 'all' && a.status !== statusFilter) return false
+   175→      if (searchQuery) {
+   176→        const q = searchQuery.toLowerCase()
+   177→        return (
+   178→          a.fullName.toLowerCase().includes(q) ||
+   179→          a.email.toLowerCase().includes(q) ||
+   180→          a.department.toLowerCase().includes(q) ||
+   181→          a.id.toLowerCase().includes(q) ||
+   182→          (a.phoneNumber && a.phoneNumber.includes(q))
+   183→        )
+   184→      }
+   185→      return true
+   186→    })
+   187→    .slice().reverse()
+   188→
+   189→  if (!authenticated) {
+   190→    return (
+   191→      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gtgs-navy to-gtgs-blue px-4">
+   192→        <Card className="w-full max-w-sm border-0 shadow-2xl">
+   193→          <CardHeader className="text-center pb-2">
+   194→            <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-gtgs-gold/15">
+   195→              <Shield className="size-7 text-gtgs-gold" />
+   196→            </div>
+   197→            <CardTitle className="text-xl text-gtgs-navy">GTGS Admin</CardTitle>
+   198→            <p className="text-sm text-muted-foreground">Enter the admin password to continue.</p>
+   199→          </CardHeader>
+   200→          <CardContent className="space-y-4">
+   201→            <div className="relative">
+   202→              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   203→              <Input
+   204→                type="password"
+   205→                placeholder="Admin password"
+   206→                value={password}
+   207→                onChange={(e) => setPassword(e.target.value)}
+   208→                onKeyDown={handleKeyDown}
+   209→                className="pl-10"
+   210→              />
+   211→            </div>
+   212→            {error && <p className="text-sm text-red-500">{error}</p>}
+   213→            <Button onClick={login} disabled={loading || !password} className="w-full bg-gtgs-navy hover:bg-gtgs-blue">
+   214→              {loading ? 'Signing in...' : 'Sign In'}
+   215→            </Button>
+   216→          </CardContent>
+   217→        </Card>
+   218→      </div>
+   219→    )
+   220→  }
+   221→
+   222→  const pending = applications.filter(a => a.status === 'pending').length
+   223→  const approved = applications.filter(a => a.status === 'approved').length
+   224→  const rejected = applications.filter(a => a.status === 'rejected').length
+   225→
+   226→  return (
+   227→    <div className="min-h-screen bg-muted/30">
+   228→      <header className="sticky top-0 z-40 border-b bg-white shadow-sm">
+   229→        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+   230→          {/* Tabs */}
+   231→          <div className="absolute left-1/2 top-full flex -translate-x-1/2 border-b bg-white">
+   232→            <button
+   233→              onClick={() => setActiveTab('applications')}
+   234→              className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-xs font-semibold transition-colors sm:text-sm ${
+   235→                activeTab === 'applications'
+   236→                  ? 'border-gtgs-navy text-gtgs-navy'
+   237→                  : 'border-transparent text-muted-foreground hover:text-gtgs-navy'
+   238→              }`}
+   239→            >
+   240→              <FileStack className="size-3.5" /> Applications
+   241→            </button>
+   242→            <button
+   243→              onClick={() => setActiveTab('posts')}
+   244→              className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-xs font-semibold transition-colors sm:text-sm ${
+   245→                activeTab === 'posts'
+   246→                  ? 'border-gtgs-navy text-gtgs-navy'
+   247→                  : 'border-transparent text-muted-foreground hover:text-gtgs-navy'
+   248→              }`}
+   249→            >
+   250→              <Megaphone className="size-3.5" /> Content Manager
+   251→            </button>
+   252→          </div>
+   253→          <div className="flex items-center gap-3">
+   254→            <div className="flex size-9 items-center justify-center rounded-lg bg-gtgs-navy">
+   255→              <Shield className="size-5 text-white" />
+   256→            </div>
+   257→            <div>
+   258→              <h1 className="text-base font-bold text-gtgs-navy sm:text-lg">Admin Dashboard</h1>
+   259→              <p className="text-[11px] text-muted-foreground">GTGS Application Management</p>
+   260→            </div>
+   261→          </div>
+   262→          <div className="flex items-center gap-2">
+   263→            <Button variant="outline" size="sm" onClick={() => window.location.href = '/'} title="Back to Home">
+   264→              <ArrowLeft className="mr-1.5 size-3.5" />
+   265→              <span className="hidden sm:inline">Home</span>
+   266→            </Button>
+   267→            <Button variant="outline" size="sm" onClick={refreshData} title="Refresh">
+   268→              <RefreshCw className="mr-1.5 size-3.5" />
+   269→              <span className="hidden sm:inline">Refresh</span>
+   270→            </Button>
+   271→            <Button variant="outline" size="sm" onClick={exportCSV}>
+   272→              <Download className="mr-1.5 size-3.5" />
+   273→              <span className="hidden sm:inline">Export CSV</span>
+   274→            </Button>
+   275→            <Button variant="outline" size="sm" onClick={() => { setAuthenticated(false); setPassword('') }}>
+   276→              <LogOut className="mr-1.5 size-3.5" />
+   277→              <span className="hidden sm:inline">Logout</span>
+   278→            </Button>
+   279→          </div>
+   280→        </div>
+   281→      </header>
+   282→
+   283→      <main className="mx-auto max-w-7xl px-4 pt-12 sm:px-6 sm:pt-14 sm:py-8">
+   284→        {activeTab === 'applications' && (<>
+   285→        {/* Stats Cards */}
+   286→        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+   287→          <Card className="p-4 sm:p-5">
+   288→            <div className="flex items-center gap-2">
+   289→              <Users className="size-5 text-gtgs-blue" />
+   290→              <p className="text-2xl font-extrabold text-gtgs-navy">{applications.length}</p>
+   291→            </div>
+   292→            <p className="mt-1 text-xs text-muted-foreground">Total Applications</p>
+   293→          </Card>
+   294→          <Card className="p-4 sm:p-5">
+   295→            <div className="flex items-center gap-2">
+   296→              <FileText className="size-5 text-amber-500" />
+   297→              <p className="text-2xl font-extrabold text-gtgs-navy">{pending}</p>
+   298→            </div>
+   299→            <p className="mt-1 text-xs text-muted-foreground">Pending Review</p>
+   300→          </Card>
+   301→          <Card className="p-4 sm:p-5">
+   302→            <div className="flex items-center gap-2">
+   303→              <CheckCircle className="size-5 text-emerald-500" />
+   304→              <p className="text-2xl font-extrabold text-gtgs-navy">{approved}</p>
+   305→            </div>
+   306→            <p className="mt-1 text-xs text-muted-foreground">Approved</p>
+   307→          </Card>
+   308→          <Card className="p-4 sm:p-5">
+   309→            <div className="flex items-center gap-2">
+   310→              <XCircle className="size-5 text-red-500" />
+   311→              <p className="text-2xl font-extrabold text-gtgs-navy">{rejected}</p>
+   312→            </div>
+   313→            <p className="mt-1 text-xs text-muted-foreground">Rejected</p>
+   314→          </Card>
+   315→        </div>
+   316→
+   317→        {activeTab === 'applications' && (<>
+   318→        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+   319→          <div className="relative flex-1">
+   320→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   321→            <Input
+   322→              placeholder="Search by name, email, phone, department, or ID..."
+   323→              value={searchQuery}
+   324→              onChange={(e) => setSearchQuery(e.target.value)}
+   325→              className="pl-9"
+   326→            />
+   327→          </div>
+   328→          <div className="flex gap-2">
+   329→            {['all', 'pending', 'approved', 'rejected'].map(s => (
+   330→              <Button
+   331→                key={s}
+   332→                variant={statusFilter === s ? 'default' : 'outline'}
+   333→                size="sm"
+   334→                className={statusFilter === s ? 'bg-gtgs-navy hover:bg-gtgs-blue' : ''}
+   335→                onClick={() => setStatusFilter(s)}
+   336→              >
+   337→                {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+   338→              </Button>
+   339→            ))}
+   340→          </div>
+   341→        </div>
+   342→
+   343→        <Card>
+   344→          <CardContent className="p-0">
+   345→            {filtered.length === 0 ? (
+   346→              <div className="py-16 text-center">
+   347→                <FileText className="mx-auto mb-3 size-10 text-muted-foreground/30" />
+   348→                <p className="text-sm text-muted-foreground">
+   349→                  {applications.length === 0 ? 'No applications received yet.' : 'No applications match your search.'}
+   350→                </p>
+   351→                <p className="mt-1 text-xs text-muted-foreground/60">
+   352→                  {applications.length === 0 ? 'Applications submitted through the portal will appear here.' : 'Try adjusting your search or filter.'}
+   353→                </p>
+   354→              </div>
+   355→            ) : (
+   356→              <div className="overflow-x-auto">
+   357→                <table className="w-full text-left text-sm">
+   358→                  <thead className="border-b bg-muted/50">
+   359→                    <tr>
+   360→                      <th className="px-4 py-3 font-semibold text-gtgs-navy">Applicant</th>
+   361→                      <th className="hidden px-4 py-3 font-semibold text-gtgs-navy sm:table-cell">Department</th>
+   362→                      <th className="hidden px-4 py-3 font-semibold text-gtgs-navy md:table-cell">Documents</th>
+   363→                      <th className="px-4 py-3 font-semibold text-gtgs-navy">Status</th>
+   364→                      <th className="hidden px-4 py-3 font-semibold text-gtgs-navy md:table-cell">Date</th>
+   365→                      <th className="px-4 py-3 font-semibold text-gtgs-navy">Actions</th>
+   366→                    </tr>
+   367→                  </thead>
+   368→                  <tbody className="divide-y">
+   369→                    {filtered.map((app) => (
+   370→                      <tr key={app.id} className="hover:bg-muted/30">
+   371→                        <td className="px-4 py-3">
+   372→                          <p className="font-medium text-gtgs-navy">{app.fullName}</p>
+   373→                          <p className="text-xs text-muted-foreground">{app.email}</p>
+   374→                        </td>
+   375→                        <td className="hidden px-4 py-3 sm:table-cell">
+   376→                          <span className="text-sm">{app.department}</span>
+   377→                        </td>
+   378→                        <td className="hidden px-4 py-3 md:table-cell">
+   379→                          {app.documents && app.documents.length > 0 ? (
+   380→                            <div className="flex items-center gap-1">
+   381→                              <Paperclip className="size-3.5 text-muted-foreground" />
+   382→                              <span className="text-xs text-muted-foreground">{app.documents.length} file{app.documents.length > 1 ? 's' : ''}</span>
+   383→                            </div>
+   384→                          ) : (
+   385→                            <span className="text-xs text-muted-foreground">None</span>
+   386→                          )}
+   387→                        </td>
+   388→                        <td className="px-4 py-3">
+   389→                          <Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[app.status] || ''}`}>
+   390→                            {app.status}
+   391→                          </Badge>
+   392→                        </td>
+   393→                        <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">
+   394→                          {new Date(app.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+   395→                        </td>
+   396→                        <td className="px-4 py-3">
+   397→                          <div className="flex items-center gap-1">
+   398→                            {app.status === 'pending' && (
+   399→                              <>
+   400→                                <Button
+   401→                                  variant="ghost"
+   402→                                  size="sm"
+   403→                                  className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+   404→                                  title="Approve"
+   405→                                  onClick={() => updateStatus(app.id, 'approved')}
+   406→                                >
+   407→                                  <CheckCircle className="mr-1 size-3.5" />
+   408→                                  <span className="hidden lg:inline text-xs font-medium">Approve</span>
+   409→                                </Button>
+   410→                                <Button
+   411→                                  variant="ghost"
+   412→                                  size="sm"
+   413→                                  className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+   414→                                  title="Reject"
+   415→                                  onClick={() => updateStatus(app.id, 'rejected')}
+   416→                                >
+   417→                                  <XCircle className="mr-1 size-3.5" />
+   418→                                  <span className="hidden lg:inline text-xs font-medium">Decline</span>
+   419→                                </Button>
+   420→                              </>
+   421→                            )}
+   422→                            <Button variant="ghost" size="sm" onClick={() => setSelectedApp(app)}>
+   423→                              <Eye className="mr-1 size-3.5" /> <span className="hidden lg:inline">View</span>
+   424→                            </Button>
+   425→                            {deleteConfirm === app.id ? (
+   426→                              <div className="flex items-center gap-1">
+   427→                                <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => deleteApplication(app.id)}>
+   428→                                  Confirm
+   429→                                </Button>
+   430→                                <Button variant="ghost" size="sm" onClick={() => setDeleteConfirm(null)}>
+   431→                                  Cancel
+   432→                                </Button>
+   433→                              </div>
+   434→                            ) : (
+   435→                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => setDeleteConfirm(app.id)}>
+   436→                                <Trash2 className="size-3.5" />
+   437→                              </Button>
+   438→                            )}
+   439→                          </div>
+   440→                        </td>
+   441→                      </tr>
+   442→                    ))}
+   443→                  </tbody>
+   444→                </table>
+   445→              </div>
+   446→            )}
+   447→          </CardContent>
+   448→        </Card>
+   449→        </>)}
+   450→        {activeTab === 'posts' && <PostsManager password={password} />}
+   451→      </main>
+   452→
+   453→      {/* Application Detail Modal */}
+   454→      {selectedApp && (
+   455→        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedApp(null)}>
+   456→          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+   457→            <div className="mb-4 flex items-center justify-between">
+   458→              <div>
+   459→                <h2 className="text-lg font-bold text-gtgs-navy">Application Details</h2>
+   460→                <p className="text-xs text-muted-foreground">{selectedApp.id}</p>
+   461→              </div>
+   462→              <Button variant="ghost" size="icon" onClick={() => setSelectedApp(null)}><X className="size-4" /></Button>
+   463→            </div>
+   464→
+   465→            <div className="space-y-3 text-sm">
+   466→              <div className="flex justify-between border-b py-2">
+   467→                <span className="text-muted-foreground">Full Name</span>
+   468→                <span className="font-medium text-gtgs-navy">{selectedApp.fullName}</span>
+   469→              </div>
+   470→              <div className="flex justify-between border-b py-2">
+   471→                <span className="text-muted-foreground">Gmail</span>
+   472→                <span className="font-medium text-gtgs-navy">{selectedApp.email}</span>
+   473→              </div>
+   474→              <div className="flex justify-between border-b py-2">
+   475→                <span className="text-muted-foreground">Phone</span>
+   476→                <span className="font-medium text-gtgs-navy">{selectedApp.phoneNumber}</span>
+   477→              </div>
+   478→              <div className="flex justify-between border-b py-2">
+   479→                <span className="text-muted-foreground">Gender</span>
+   480→                <span className="font-medium text-gtgs-navy">{selectedApp.gender || 'N/A'}</span>
+   481→              </div>
+   482→              <div className="flex justify-between border-b py-2">
+   483→                <span className="text-muted-foreground">Date of Birth</span>
+   484→                <span className="font-medium text-gtgs-navy">{selectedApp.dateOfBirth || 'N/A'}</span>
+   485→              </div>
+   486→              <div className="flex justify-between border-b py-2">
+   487→                <span className="text-muted-foreground">Address</span>
+   488→                <span className="font-medium text-gtgs-navy">{selectedApp.residentialAddress || 'N/A'}</span>
+   489→              </div>
+   490→              <div className="flex justify-between border-b py-2">
+   491→                <span className="text-muted-foreground">Department</span>
+   492→                <span className="font-medium text-gtgs-navy">{selectedApp.department}</span>
+   493→              </div>
+   494→              <div className="flex justify-between border-b py-2">
+   495→                <span className="text-muted-foreground">Experience</span>
+   496→                <span className="font-medium text-gtgs-navy">{selectedApp.experienceLevel || 'N/A'}</span>
+   497→              </div>
+   498→              <div className="flex justify-between border-b py-2">
+   499→                <span className="text-muted-foreground">Submitted</span>
+   500→                <span className="font-medium text-gtgs-navy">{new Date(selectedApp.submittedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+   501→              </div>
+   502→              {selectedApp.personalStatement && (
+   503→                <div className="border-b py-2">
+   504→                  <p className="text-muted-foreground">Personal Statement</p>
+   505→                  <p className="mt-1 text-sm text-gtgs-navy leading-relaxed">{selectedApp.personalStatement}</p>
+   506→                </div>
+   507→              )}
+   508→
+   509→              {/* Documents Section */}
+   510→              {selectedApp.documents && selectedApp.documents.length > 0 && (
+   511→                <div className="border-b py-2">
+   512→                  <p className="mb-2 text-muted-foreground">Uploaded Documents ({selectedApp.documents.length})</p>
+   513→                  <div className="space-y-2">
+   514→                    {selectedApp.documents.map((doc, i) => (
+   515→                      <div key={i} className="flex items-center justify-between gap-2 rounded-lg border p-2.5">
+   516→                        <div className="flex items-center gap-2 min-w-0">
+   517→                          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
+   518→                            <FileText className="size-4 text-muted-foreground" />
+   519→                          </div>
+   520→                          <div className="min-w-0">
+   521→                            <p className="text-xs font-medium text-gtgs-navy truncate">{DOC_LABELS[doc.key] || doc.key}</p>
+   522→                            <p className="text-[10px] text-muted-foreground truncate">{doc.fileName} &middot; {formatFileSize(doc.fileSize)}</p>
+   523→                          </div>
+   524→                        </div>
+   525→                        <div className="flex items-center gap-1 shrink-0">
+   526→                          <Button
+   527→                            variant="ghost"
+   528→                            size="sm"
+   529→                            className="size-8 p-0"
+   530→                            title="View"
+   531→                            onClick={() => viewDocument(doc.savedPath)}
+   532→                          >
+   533→                            <Eye className="size-3.5" />
+   534→                          </Button>
+   535→                          <Button
+   536→                            variant="ghost"
+   537→                            size="sm"
+   538→                            className="size-8 p-0"
+   539→                            title="Download"
+   540→                            onClick={() => downloadDocument(doc.savedPath, doc.fileName)}
+   541→                          >
+   542→                            <Download className="size-3.5" />
+   543→                          </Button>
+   544→                        </div>
+   545→                      </div>
+   546→                    ))}
+   547→                  </div>
+   548→                </div>
+   549→              )}
+   550→            </div>
+   551→
+   552→            {/* Status Actions */}
+   553→            <div className="mt-5 flex gap-2">
+   554→              {selectedApp.status !== 'approved' && (
+   555→                <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => updateStatus(selectedApp.id, 'approved')}>
+   556→                  <CheckCircle className="mr-1.5 size-4" /> Approve
+   557→                </Button>
+   558→              )}
+   559→              {selectedApp.status !== 'rejected' && (
+   560→                <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={() => updateStatus(selectedApp.id, 'rejected')}>
+   561→                  <XCircle className="mr-1.5 size-4" /> Reject
+   562→                </Button>
+   563→              )}
+   564→              {selectedApp.status !== 'pending' && (
+   565→                <Button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white" onClick={() => updateStatus(selectedApp.id, 'pending')}>
+   566→                  Reset to Pending
+   567→                </Button>
+   568→              )}
+   569→            </div>
+   570→          </div>
+   571→        </div>
+   572→      )}
+   573→    </div>
+   574→  )
+   575→}
